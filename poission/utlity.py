@@ -31,9 +31,11 @@ def GetFlux(mesh,u):
     # Define facet normal vector (built-in method)
     n = FacetNormal(mesh)
     m1 = dot(grad(u), n)*v*ds(1)
-    l1 = assemble(m1)
+    flux_vector = assemble(m1)
+    
+    flux_func=Vector2Function(V,flux_vector)
 
-    return l1
+    return flux_vector,flux_func
 
 def Vector2Function(V,b):
      u= Function(V)

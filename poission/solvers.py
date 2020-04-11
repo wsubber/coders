@@ -16,44 +16,45 @@ import GPy
 matplotlib.rc('font',size=16)
 matplotlib.rcParams["font.family"] = "Times New Roman"
 
-def Dirichlet(mesh,u0,left,top,right,bottom,has_interface=False,u1=None):
+def Dirichlet(mesh,u1):
 
     V = FunctionSpace(mesh, "CG", 1)
     u = TrialFunction(V)
     v = TestFunction(V)
-    left=left
-    top=top
-    right=right
-    bottom=bottom
-    def Dirichlet_boundary(x, on_boundary):
-            return on_boundary and near(x[0],left) or near(x[0],right) or near(x[1],top) or near(x[1],bottom)
 
+    if isinstance(u1,float) or isinstance(u1,int):
+        u1 = Function(V)
+
+
+    def Dirichlet_boundary(x, on_boundary):
+            return on_boundary and near(x[0],0.0)  or near(x[1],1.0) or near(x[1],0.0)
+    u0 = 0.0
     bc = DirichletBC(V, u0,Dirichlet_boundary)
 
-    if has_interface:
-        class Interface(SubDomain):
-            def inside(self, x, on_boundary):
-                return near(x[0], 1.0)
-        interface= Interface()
-        facets = MeshFunction("size_t", mesh, mesh.topology().dim()-1, 0)
-        facets.set_all(0)
-        tag = 5
-        interface.mark(facets, tag)
 
-        class K(UserExpression):
-            def __init__(self, facets,tag, u1, **kwargs):
-                super().__init__(**kwargs)
-                self.facets = facets
-                self.u1 = u1
-                self.tag = tag
-            def eval_cell(self, values, x, cell):
-                if near(x[0], 1.0):
-                    values[0]=u1([x[0],x[1]])
-            def value_shape(self):
-                return ()
+    class Interface(SubDomain):
+        def inside(self, x, on_boundary):
+            return near(x[0], 1.0)
+    interface= Interface()
+    facets = MeshFunction("size_t", mesh, mesh.topology().dim()-1, 0)
+    facets.set_all(0)
+    tag = 5
+    interface.mark(facets, tag)
 
-        kappa = K(facets,tag,u1)
-        bcinterface = DirichletBC(V, kappa,interface)
+    class K(UserExpression):
+        def __init__(self, facets,tag, u1, **kwargs):
+            super().__init__(**kwargs)
+            self.facets = facets
+            self.u1 = u1
+            self.tag = tag
+        def eval_cell(self, values, x, cell):
+            if near(x[0], 1.0):
+                values[0]=u1([x[0],x[1]])
+        def value_shape(self):
+            return ()
+
+    kappa = K(facets,tag,u1)
+    bcinterface = DirichletBC(V, kappa,interface)
 
     f = Constant(1.0)
 
@@ -65,8 +66,7 @@ def Dirichlet(mesh,u0,left,top,right,bottom,has_interface=False,u1=None):
 
     bc.apply(A, b)
 
-    if has_interface:
-        bcinterface.apply(A, b)
+    bcinterface.apply(A, b)
 
     u = Function(V)
     solve(A, u.vector(), b)
@@ -82,7 +82,7 @@ def Dirichlet(mesh,u0,left,top,right,bottom,has_interface=False,u1=None):
 
     return u
 
-def Neumann(mesh,l):
+def Neumann(mesh,lamda):
 
     V = FunctionSpace(mesh, "CG", 1)
     u = TrialFunction(V)
@@ -107,7 +107,10 @@ def Neumann(mesh,l):
 
     a = inner(grad(u), grad(v))*dx
 
-    g = Vector2Function(V,l)
+    if isinstance(lamda, Vector):
+        g = Vector2Function(V,lamda)
+    elif isinstance(lamda, Function):
+        g = project(lamda, V)
 
     facets = MeshFunction("size_t", mesh, mesh.topology().dim()-1, 0)
     facets.set_all(0)
@@ -133,3 +136,36 @@ def Neumann(mesh,l):
 
     return u
 
+def Direct(mesh):
+    V = FunctionSpace(mesh, "CG", 1)
+    u = TrialFunction(V)
+    v = TestFunction(V)
+
+    def Dirichlet_boundary(x, on_boundary):
+            return on_boundary and near(x[0],0.0) or near(x[0],2.0) or near(x[1],1.0) or near(x[1],0.0)
+    u0 = 0.0
+    bc = DirichletBC(V, u0,Dirichlet_boundary)
+
+    f = Constant(1.0)
+
+    a = inner(grad(u), grad(v))*dx
+    L =  f*v*dx
+
+    A = assemble(a)
+    b = assemble(L)
+
+    bc.apply(A, b)
+
+    u = Function(V)
+    solve(A, u.vector(), b)
+
+
+    triang = tri.Triangulation(*mesh.coordinates().reshape((-1, 2)).T,
+                               triangles=mesh.cells())
+
+    plt.figure()
+    plt.tricontourf(triang, u.compute_vertex_values())
+    plt.colorbar()
+    plt.show()
+
+    return u
