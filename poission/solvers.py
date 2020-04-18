@@ -74,8 +74,12 @@ def Dsolve(submesh0,u1,f0=1.0,Plot=False):
     v0 = TestFunction(V0)
     
     def Dirichlet_boundary0(x, on_boundary):
-        return on_boundary and near(x[0],0.0)  or near(x[1],1.0) or near(x[1],0.0)
+        return on_boundary and  near(x[1],1.0) or near(x[1],0.0)
     
+    class Left(SubDomain):
+        def inside(self, x, on_boundary):
+            return near(x[0], 0.0)
+
     
     class Interface(SubDomain):
         def inside(self, x, on_boundary):
@@ -86,6 +90,8 @@ def Dsolve(submesh0,u1,f0=1.0,Plot=False):
     facets.set_all(1)
     interface= Interface()
     interface.mark(facets, 0)
+    left = Left()
+    left.mark(facets, 2)
     #ds = Measure("ds")[facets]
     ds = Measure('ds', subdomain_data=facets)    
     tag=0
@@ -111,10 +117,10 @@ def Dsolve(submesh0,u1,f0=1.0,Plot=False):
     
     bc0 = DirichletBC(V0, 0.0,Dirichlet_boundary0)
     
-#    f0 = Constant(1.0)
+    g_L = Expression("0.1*sin(x[1])",degree=2) 
     
     a0 = inner(grad(u0), grad(v0))*dx
-    L0 =  f0*v0*dx
+    L0 =  f0*v0*dx + g_L*v0*ds(2)
     
     A0 = assemble(a0)
     b0 = assemble(L0)
@@ -144,19 +150,28 @@ def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
     v1 = TestFunction(V1)
     
     def Dirichlet_boundary1(x, on_boundary):
-        return on_boundary and near(x[0],1.0)  or near(x[1],1.0) or near(x[1],0.0)
+        return on_boundary and near(x[1],1.0) or near(x[1],0.0)
+    
+    class Right(SubDomain):
+        def inside(self, x, on_boundary):
+            return near(x[0], 1.0)
+    
     class Interface(SubDomain):
         def inside(self, x, on_boundary):
             return near(x[0], 0.5)
     facets = MeshFunction("size_t", submesh1, submesh1.topology().dim()-1, 0)
     facets.set_all(0)
     interface= Interface()
-    tag=1
+    tag = 1
     interface.mark(facets, tag)
+    right = Right()
+    right.mark(facets, 2)
+    
+    
     ds = Measure('ds', subdomain_data=facets)    
     
     bc1 = DirichletBC(V1, 0.0,Dirichlet_boundary1)
-    
+    bc2 = DirichletBC(V1, 0.1,right)
 #    f1 = Constant(1.0)
     
     a1 = inner(grad(u1), grad(v1))*dx
@@ -183,7 +198,7 @@ def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
     b1 = assemble(L1)
     
     bc1.apply(A1, b1)
-    
+    bc2.apply(A1, b1)    
     u1 = Function(V1)
     solve(A1, u1.vector(), b1)
     
