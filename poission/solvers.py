@@ -14,7 +14,7 @@ import matplotlib.tri as tri
 from tools import *
 import pandas as pd
 
-def generate_samples(submesh0, submesh1,nsamples=10):
+def generate_samples(submesh0, submesh1,nsamples=10,f=1):
     V0 = FunctionSpace(submesh0,'CG',1)
     u_avaraged=Function(V0)
     
@@ -22,8 +22,8 @@ def generate_samples(submesh0, submesh1,nsamples=10):
     df_k=pd.DataFrame()
         
     for isample in range(nsamples):
-        flux0,u0=Dsolve(submesh0,u_avaraged)
-        u1=Nsolve(submesh1, flux0)
+        flux0,u0=Dsolve(submesh0,u_avaraged,f)
+        u1=Nsolve(submesh1, flux0,f)
         u_avaraged=0.5*(u1+u0)
         
         lamb,X0,index0=get_interface_values_from_function(0.5,V0,submesh0,flux0)
@@ -37,7 +37,7 @@ def generate_samples(submesh0, submesh1,nsamples=10):
     
     return df
 
-def Fsolve(mesh):
+def Fsolve(mesh,Plot=False):
     
     V = FunctionSpace(mesh,'CG',1)
     u = TrialFunction(V)
@@ -61,13 +61,13 @@ def Fsolve(mesh):
     u = Function(V)
     solve(A, u.vector(), b)
     
-    
-    Plot_solution(mesh,u)
+    if Plot:
+        Plot_solution(mesh,u)
 
     return u
 
  
-def Dsolve(submesh0,u1,f0=1.0):
+def Dsolve(submesh0,u1,f0=1.0,Plot=False):
     
     V0 = FunctionSpace(submesh0,'CG',1)
     u0 = TrialFunction(V0)
@@ -125,7 +125,8 @@ def Dsolve(submesh0,u1,f0=1.0):
     u0 = Function(V0)
     solve(A0, u0.vector(), b0)
     
-    Plot_solution(submesh0,u0)
+    if Plot:
+        Plot_solution(submesh0,u0)
     # compute flux    
     g=Flux(u0, 1)
     n0 = FacetNormal(submesh0)
@@ -137,7 +138,7 @@ def Dsolve(submesh0,u1,f0=1.0):
     return flux_function, u0
 #%%
 # subdomain 1
-def Nsolve(submesh1,flux0,f1=1.0):
+def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
     V1 = FunctionSpace(submesh1,'CG',1)
     u1 = TrialFunction(V1)
     v1 = TestFunction(V1)
@@ -186,7 +187,8 @@ def Nsolve(submesh1,flux0,f1=1.0):
     u1 = Function(V1)
     solve(A1, u1.vector(), b1)
     
-    Plot_solution(submesh1,u1)
+    if Plot:
+        Plot_solution(submesh1,u1)
     
     return u1
 
