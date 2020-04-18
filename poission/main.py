@@ -1,93 +1,73 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr  2 15:13:29 2020
+Created on Sun Apr  5 19:29:36 2020
 
 @author: 212731466
 """
-#%%
+
 from dolfin import *
 import numpy as np
-parameters['allow_extrapolation'] = True
+import matplotlib.pylab as plt
+import matplotlib.tri as tri
+from tools import *
 from solvers import *
-from utlity import *
-from mshr import *
-#%% solve the global problem
-# set mesh
-mesh = RectangleMesh(Point(0.0, 0.0), Point(2.0,1.0), 20, 20)
-V = FunctionSpace(mesh, "CG", 1)
-u=Direct(mesh)
+import pandas as pd
+import matplotlib
+#%% now using u1 get ub from subdomain 1 to subdomain 0
+matplotlib.rc('font',size=16)
+matplotlib.rcParams["font.family"] = "Times New Roman"
+omega = 1.0
+u_e = Expression('sin(omega*pi*x[0])*sin(omega*pi*x[1])',
+                 degree=6, omega=omega)
+f = 2*omega**2*pi**2*u_e
+
+
+def DDM_solver(n):
+    submesh0 = RectangleMesh(Point(0.0, 0.0), Point(0.5,1.0), n, n)
+    submesh1 = RectangleMesh(Point(0.5, 0.0), Point(1.0,1.0), n, n)    
+    V0 = FunctionSpace(submesh0,'CG',1)
+    u_avaraged=Function(V0)
+    for i in range(20):
+        flux0,u0=Dsolve(submesh0,u_avaraged,f)
+        u1=Nsolve(submesh1, flux0,f)
+        u_avaraged=0.5*(u1+u0)
+    return u0,u1
+
+
+
+num_levels=5
+
+n = 8  # coarsest mesh division
+h = []
+E = []
+L2norm0 = []
+L2norm1 = []
+for i in range(num_levels):
+    h.append(1.0 / n)
+    # DDM solver
+    u0, u1 = DDM_solver(n)
+    errors_0,E5_0 = compute_errors(u_e, u0)
+    L2norm0.append(E5_0)
+
+    errors_0,E5_1 = compute_errors(u_e, u1)
+    L2norm1.append(E5_1)
+    print('2 x (%d x %d), %d unknowns, E1 = %g' %
+      (n, n, u0.function_space().dim(), errors_0['u - u_e']))
+        
+    n *= 2
 
 #%%
+from matplotlib import rc
 
-# now the mesh is decomposed into
-# mesh = mesh0 + mesh1
-mesh_c = RectangleMesh(Point(0.0, 0.0), Point(2.0,1.0), 30, 30)
-V_c = FunctionSpace(mesh_c, 'CG', 1)
-
-#%% define firest domain  mesh0
-mesh0 = RectangleMesh(Point(0.0, 0.0), Point(1.0,1.0), 10, 10)
-V0 = FunctionSpace(mesh0, 'CG', 1)
-# define second domain mesh 1
-mesh1 = RectangleMesh(Point(1.0, 0), Point(2,1.0), 10, 10)
-V1 = FunctionSpace(mesh1, 'CG', 1)
-# set initeal Dirichlet BC
-initial=0.0
-u0 = Dirichlet(mesh0,initial)
-# get flux
-lambda0_vec, lambda0_fun= GetFlux(mesh0,u0)
-
-for iiter in range(2):
-    #% solve Neumann in second domsin
-    u1=Neumann(mesh1,lambda0_fun)
-    # get values on the boundary
-    u0=Dirichlet(mesh0,u1)
-    # get flux
-    lambda0_vec, lambda0_fun = GetFlux(mesh0,u0)
-#%%
-
-
-
+rc('font', **{'family':'serif','serif':['Palatino']})
+rc('text', usetex=True)
+h=np.array(h)
 plt.figure()
-plot(u0)
-plot(u1)
+plt.loglog(h, np.array(L2norm0)+np.array(L2norm1),'-o',label='DDM')
+plt.xlabel('$h$')
+plt.ylabel('$L_2$')
+plt.loglog(h, h**2,'rs:',label='$O(h^2)$')
+plt.legend()
+plt.savefig('con.eps', format='eps')
 plt.show()
-
-n0 = norm(u0)
-
-n1 = norm(u1)
-
-n = norm(u)
-
-print("n",n)
-print("n0",n0)
-print("n1",n1)
-
-#%%
-if 0:
-    mesh0 = RectangleMesh(Point(0.0, 0.0), Point(1.0,1.0), 2, 2)
-    mesh1 = RectangleMesh(Point(0.0, 0.0), Point(1.0,1.0), 20, 20)
-    V0 = FunctionSpace(mesh0, "CG", 1)
-    V1 = FunctionSpace(mesh1, "CG", 1)
-
-    # set initeal Dirichlet BC
-    initial=0.0
-    u0 = Dirichlet(mesh0,initial)
-    u1 = Dirichlet(mesh1,initial)
-
-    from fenicstools import interpolate_nonmatching_mesh
-
-    u2 = interpolate_nonmatching_mesh(u0, V1)
-
-    #%%
-    parameters['allow_extrapolation'] = True
-    mesh1 = UnitSquareMesh(16, 16)
-    V1 = FunctionSpace(mesh1, 'CG', 2)
-    u1 = interpolate(Expression("sin(pi*x[0])*cos(pi*x[1])",degree=2), V1)
-    # Create a new _different_ mesh and FunctionSpace
-    mesh2 = UnitSquareMesh(10, 10)
-    x = mesh2.coordinates()
-    x[:, :] = x[:, :] * 0.5 + 0.25
-    V2 = FunctionSpace(mesh2, 'CG', 1)
-    u2 = interpolate_nonmatching_mesh(u1, V2)
-    u3 = interpolate_nonmatching_mesh(u2, V1)
