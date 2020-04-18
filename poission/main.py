@@ -59,8 +59,8 @@ mesh1 = generate_mesh(submesh1, n)
 V0 = FunctionSpace(mesh0,'CG',1)
 u_avaraged=Function(V0)
 for i in range(20):
-    flux0,u0=Dsolve(mesh0,u_avaraged)
-    u1=Nsolve(mesh1, flux0)
+    flux0,u0=Dsolve(mesh0,u_avaraged,len(cir0))
+    u1=Nsolve(mesh1, flux0,len(cir1))
     u_avaraged=0.5*(u1+u0)
  
 plot(u0)

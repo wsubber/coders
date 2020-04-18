@@ -67,7 +67,7 @@ def Fsolve(mesh,Plot=False):
     return u
 
  
-def Dsolve(submesh0,u1,f0=1.0,Plot=False):
+def Dsolve(submesh0,u1,no_circles,f0=1.0,Plot=False):
     
     V0 = FunctionSpace(submesh0,'CG',1)
     u0 = TrialFunction(V0)
@@ -109,18 +109,28 @@ def Dsolve(submesh0,u1,f0=1.0,Plot=False):
             return ()
     
 
-    kappa = K(facets,tag,u1)
+    u_boundary = K(facets,tag,u1)
     
-    bcinterface = DirichletBC(V0, kappa,interface)
-    
-    
+    bcinterface = DirichletBC(V0, u_boundary,interface)    
     
     bc0 = DirichletBC(V0, 0.0,Dirichlet_boundary0)
     
     g_L = Expression("0.1*sin(x[1])",degree=2) 
+
+    markers = MeshFunction('size_t', submesh0, submesh0.topology().dim(), submesh0.domains())
+    dx = Measure('dx', domain=submesh0, subdomain_data=markers)
+
+    kappa = np.ones((no_circles+1, )) * 0.01
+    kappa[0] = 1.0
     
-    a0 = inner(grad(u0), grad(v0))*dx
-    L0 =  f0*v0*dx + g_L*v0*ds(2)
+    a0 = kappa[0]*inner(grad(u0), grad(v0))*dx(0)
+    L0 =  f0*v0*dx(0) + g_L*v0*ds(2)
+    
+    for idx in range(no_circles):
+        a0 = a0 + kappa[idx+1]* inner(grad(u0), grad(v0))*dx(idx+1)
+        L0 = L0 + f0*v0*dx(idx+1)    
+    
+    
     
     A0 = assemble(a0)
     b0 = assemble(L0)
@@ -144,7 +154,7 @@ def Dsolve(submesh0,u1,f0=1.0,Plot=False):
     return flux_function, u0
 #%%
 # subdomain 1
-def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
+def Nsolve(submesh1,flux0,no_circles,f1=1.0,Plot=False):
     V1 = FunctionSpace(submesh1,'CG',1)
     u1 = TrialFunction(V1)
     v1 = TestFunction(V1)
@@ -174,7 +184,13 @@ def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
     bc2 = DirichletBC(V1, 0.1,right)
 #    f1 = Constant(1.0)
     
-    a1 = inner(grad(u1), grad(v1))*dx
+    markers = MeshFunction('size_t', submesh1, submesh1.topology().dim(), submesh1.domains())
+    dx = Measure('dx', domain=submesh1, subdomain_data=markers)
+
+    kappa = np.ones((no_circles+1, )) * 0.01
+    kappa[0] = 1.0
+
+
      
      
     #flux0.set_allow_extrapolation(True)
@@ -192,7 +208,16 @@ def Nsolve(submesh1,flux0,f1=1.0,Plot=False):
     
     flux1 = Compute_Flux(facets,tag,flux0)
     
-    L1 =  f1*v1*dx  + flux1*v1*ds(1)
+    
+    
+    a1 = kappa[0]*inner(grad(u1), grad(v1))*dx(0)
+    L1 =  f1*v1*dx(0)  + flux1*v1*ds(1)
+    
+    for idx in range(no_circles):
+        a1 = a1 + kappa[idx+1]* inner(grad(u1), grad(v1))*dx(idx+1)
+        L1 = L1 + f1*v1*dx(idx+1)    
+      
+    
     
     A1 = assemble(a1)
     b1 = assemble(L1)
